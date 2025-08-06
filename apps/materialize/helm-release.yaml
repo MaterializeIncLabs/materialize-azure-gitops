@@ -1,0 +1,41 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: materialize-operator
+  namespace: materialize-system
+spec:
+  interval: 5m
+  chart:
+    spec:
+      chart: operator
+      sourceRef:
+        kind: HelmRepository
+        name: materialize
+        namespace: materialize-system
+      version: ">=0.1.0"
+  values:
+    operator:
+      cloudProvider:
+        type: azure
+    
+    # Configure tolerations to run on our tainted nodes
+    tolerations:
+      - key: materialize
+        operator: Equal
+        value: dedicated
+        effect: NoSchedule
+    
+    nodeSelector:
+      agentpool: mzpool
+    
+    # Storage configuration for Azure
+    storage:
+      storageClass: managed-premium
+    
+    # Network policies disabled for simplicity
+    networkPolicies:
+      enabled: false
+    
+    # Enable observability
+    observability:
+      enabled: true
