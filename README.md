@@ -32,7 +32,7 @@ az postgres flexible-server create \
   --name mz-postgres-$(date +%s) \
   --location eastus2 \
   --admin-user mzadmin \
-  --admin-password "MaterializeDB123!" \
+  --admin-password "password!" \
   --sku-name Standard_B1ms \
   --tier Burstable \
   --storage-size 32 \
