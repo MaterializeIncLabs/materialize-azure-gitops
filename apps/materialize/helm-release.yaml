@@ -7,34 +7,84 @@ spec:
   interval: 5m
   chart:
     spec:
-      chart: operator
+      chart: materialize-operator
       sourceRef:
         kind: HelmRepository
         name: materialize
         namespace: materialize-system
-      version: ">=0.1.0"
+      version: ">=25.2.0"
   values:
     operator:
       cloudProvider:
         type: azure
+        region: eastus2
+      
+      # Configure tolerations to run on our tainted nodes
+      tolerations:
+        - key: materialize
+          operator: Equal
+          value: dedicated
+          effect: NoSchedule
+      
+      nodeSelector:
+        agentpool: mzpool
     
-    # Configure tolerations to run on our tainted nodes
-    tolerations:
-      - key: materialize
-        operator: Equal
-        value: dedicated
-        effect: NoSchedule
+    # Configure tolerations for all components
+    environmentd:
+      tolerations:
+        - key: materialize
+          operator: Equal
+          value: dedicated
+          effect: NoSchedule
+      nodeSelector:
+        agentpool: mzpool
     
-    nodeSelector:
-      agentpool: mzpool
+    clusterd:
+      tolerations:
+        - key: materialize
+          operator: Equal
+          value: dedicated
+          effect: NoSchedule
+      nodeSelector:
+        agentpool: mzpool
     
-    # Storage configuration for Azure
+    balancerd:
+      tolerations:
+        - key: materialize
+          operator: Equal
+          value: dedicated
+          effect: NoSchedule
+      nodeSelector:
+        agentpool: mzpool
+    
+    console:
+      tolerations:
+        - key: materialize
+          operator: Equal
+          value: dedicated
+          effect: NoSchedule
+      nodeSelector:
+        agentpool: mzpool
+    
+    # Storage configuration for Azure - use existing StorageClass
     storage:
-      storageClass: managed-premium
+      storageClass:
+        create: false
+        name: managed-premium
     
-    # Network policies disabled for simplicity
+    # Network policies enabled for security
     networkPolicies:
-      enabled: false
+      enabled: true
+      internal:
+        enabled: true
+      ingress:
+        enabled: true
+        cidrs:
+          - "0.0.0.0/0"  # Allow external access - restrict this in production
+      egress:
+        enabled: true
+        cidrs:
+          - "0.0.0.0/0"  # Allow external connections - restrict this in production
     
     # Enable observability
     observability:

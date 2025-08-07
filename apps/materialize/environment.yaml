@@ -1,0 +1,20 @@
+apiVersion: materialize.cloud/v1alpha1
+kind: Materialize
+metadata:
+  name: production
+  namespace: materialize-system
+spec:
+  # PostgreSQL backend configuration
+  backendSecretName: postgres-credentials
+  
+  # Environment configuration
+  environmentdImageRef: materialize/environmentd:v0.147.4
+  
+  # Set environment ID (new ID for fresh initialization with blob storage)
+  environmentId: 7f615ba3-d3f4-4184-b846-099507c70364
+  
+  # Enable RBAC and security features (temporarily disabled due to PostgreSQL connection limits)
+  enableRbac: false
+  authenticatorKind: None
+  
+  # Azure Blob Storage configured via SAS token in persist_backend_url

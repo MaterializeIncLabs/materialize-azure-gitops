@@ -1,0 +1,18 @@
+# Materialize GitOps .gitignore
+
+# Environment files with sensitive data
+.env
+
+# Temporary files
+*.tmp
+*.swp
+*.bak
+
+# IDE files
+.vscode/
+.idea/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db

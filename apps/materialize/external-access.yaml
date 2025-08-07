@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: materialize-sql-external
+  namespace: materialize-system
+spec:
+  type: LoadBalancer
+  selector:
+    app: materialize-environmentd
+  ports:
+    - name: sql
+      port: 6875
+      targetPort: 6875
+    - name: http
+      port: 6876
+      targetPort: 6876
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: materialize-console-external
+  namespace: materialize-system
+spec:
+  type: LoadBalancer
+  selector:
+    app: materialize-console
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080

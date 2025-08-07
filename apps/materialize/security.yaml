@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: materialize-network-policy
+  namespace: materialize-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: materialize
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: materialize-system
+    ports:
+    - protocol: TCP
+      port: 6875
+    - protocol: TCP
+      port: 6876
+    - protocol: TCP
+      port: 8080
+  egress:
+  - {} # Allow all outbound for now - restrict in production
