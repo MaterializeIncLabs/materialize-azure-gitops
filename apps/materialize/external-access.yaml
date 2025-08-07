@@ -6,7 +6,7 @@ metadata:
 spec:
   type: LoadBalancer
   selector:
-    app: materialize-environmentd
+    app: environmentd
   ports:
     - name: sql
       port: 6875
@@ -23,7 +23,7 @@ metadata:
 spec:
   type: LoadBalancer
   selector:
-    app: materialize-console
+    app: console
   ports:
     - name: http
       port: 8080
