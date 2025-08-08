@@ -222,6 +222,171 @@ You should see hundreds of blob files with names like:
 - `s<shard-id>/v<version>/r<record-id>` - Data persistence files
 - `s<shard-id>/n<node>/p<partition>` - Partition data files
 
+## Azure Event Hubs Integration
+
+This setup includes Azure Event Hubs for real-time data streaming into Materialize. The integration supports both append-only and upsert data patterns.
+
+### Event Hubs Infrastructure
+
+#### 1. Create Event Hubs Namespace
+```bash
+az eventhubs namespace create \
+  --resource-group materialize-rg \
+  --name mz-eventhubs-$(date +%s | tail -c 8) \
+  --location eastus2 \
+  --sku Standard
+```
+
+#### 2. Create Event Hub Topics
+```bash
+# Orders topic (append-only)
+az eventhubs eventhub create \
+  --resource-group materialize-rg \
+  --namespace-name <your-eventhubs-namespace> \
+  --name orders \
+  --partition-count 4
+
+# Customers topic (upsert)
+az eventhubs eventhub create \
+  --resource-group materialize-rg \
+  --namespace-name <your-eventhubs-namespace> \
+  --name customers \
+  --partition-count 2
+```
+
+#### 3. Create Namespace-Level Authorization Rules
+```bash
+# Read access for Materialize (all topics)
+az eventhubs namespace authorization-rule create \
+  --resource-group materialize-rg \
+  --namespace-name <your-eventhubs-namespace> \
+  --name materialize-multi-reader \
+  --rights Listen
+
+# Write access for data publishers (all topics)
+az eventhubs namespace authorization-rule create \
+  --resource-group materialize-rg \
+  --namespace-name <your-eventhubs-namespace> \
+  --name data-multi-publisher \
+  --rights Send
+
+# Get connection strings
+az eventhubs namespace authorization-rule keys list \
+  --resource-group materialize-rg \
+  --namespace-name <your-eventhubs-namespace> \
+  --name materialize-multi-reader
+```
+
+### Materialize Configuration
+
+#### 1. Create Single Connection for Multiple Topics
+```sql
+-- Create secret with namespace-level connection (no EntityPath)
+CREATE SECRET eventhubs_namespace_connection AS '<your-connection-string>';
+
+-- Create single Kafka connection for all Event Hub topics
+CREATE CONNECTION eventhubs_multi_kafka TO KAFKA (
+    BROKER '<your-namespace>.servicebus.windows.net:9093',
+    SASL MECHANISMS = 'PLAIN',
+    SASL USERNAME = '$ConnectionString',
+    SASL PASSWORD = SECRET eventhubs_namespace_connection,
+    SECURITY PROTOCOL = 'SASL_SSL'
+);
+```
+
+#### 2. Create Sources
+
+**Orders (Append-Only)**
+```sql
+CREATE SOURCE orders_raw
+FROM KAFKA CONNECTION eventhubs_multi_kafka (TOPIC 'orders')
+FORMAT JSON;
+
+CREATE MATERIALIZED VIEW orders AS
+SELECT
+    (data->>'order_id')::text as order_id,
+    (data->>'customer_name')::text as customer_name,
+    (data->>'total_amount')::double as total_amount,
+    (data->>'status')::text as status,
+    (data->>'created_at')::text as created_at,
+    (data->>'region')::text as region
+FROM orders_raw;
+```
+
+**Customers (Upsert)**
+```sql
+CREATE SOURCE customers_raw
+FROM KAFKA CONNECTION eventhubs_multi_kafka (TOPIC 'customers')
+KEY FORMAT TEXT
+VALUE FORMAT JSON
+ENVELOPE UPSERT;
+
+CREATE MATERIALIZED VIEW customers AS
+SELECT
+    (data->>'customer_id')::text as customer_id,
+    (data->>'first_name')::text as first_name,
+    (data->>'last_name')::text as last_name,
+    (data->>'tier')::text as tier,
+    (data->>'total_orders')::int as total_orders,
+    (data->>'lifetime_value')::double as lifetime_value
+FROM customers_raw
+WHERE data IS NOT NULL;
+```
+
+### Setup Event Hubs Integration
+
+#### 1. Configure Environment Variables
+```bash
+# Copy template and edit with your values
+cp .env.template .env
+# Edit .env with your Event Hubs namespace and connection strings
+
+# Load environment
+source .env
+```
+
+#### 2. Setup Materialize Sources
+```bash
+# Automatically create Event Hubs connection and sources
+./scripts/setup-eventhubs-sources.sh
+```
+
+#### 3. Send Test Data
+```bash
+# Send sample orders (append-only)
+python3 scripts/send-sample-data.py
+
+# Send customer updates (demonstrates upsert)
+python3 scripts/send-more-updates.py
+```
+
+#### 4. Query Real-time Data
+```sql
+-- Check orders stream
+SELECT COUNT(*) FROM orders;
+SELECT * FROM orders ORDER BY created_at DESC LIMIT 10;
+
+-- Check customer upserts (should show latest state only)
+SELECT COUNT(*) FROM customers;  -- Exactly 10 customers despite multiple updates
+SELECT * FROM customers ORDER BY lifetime_value DESC;
+
+-- Real-time analytics
+SELECT region, COUNT(*) as orders, SUM(total_amount) as revenue
+FROM orders GROUP BY region;
+
+SELECT tier, AVG(total_orders) as avg_orders, SUM(lifetime_value) as total_ltv
+FROM customers GROUP BY tier;
+```
+
+### Event Hubs Benefits
+
+- **Real-time Streaming**: Sub-second latency from Event Hubs to Materialize
+- **Single Connection**: One connection serves multiple topics (cost-efficient)
+- **Kafka Compatibility**: Event Hubs speaks Kafka protocol natively
+- **Upsert Support**: Proper key-based upserts for maintaining current state
+- **Scalability**: Partitioned topics for high throughput
+- **Persistence**: Event retention for replay and recovery
+
 ## Troubleshooting
 
 ### Common Issues
@@ -263,12 +428,15 @@ If you need to start fresh with blob storage (e.g., after configuration changes)
 
 ## Security Notes
 
-- Never commit `.env` file to git
-- Rotate SAS tokens regularly
+- **Never commit `.env` file to git** - contains sensitive credentials
+- All scripts use environment variables - no hardcoded secrets
+- Rotate SAS tokens and Event Hubs access keys regularly
+- Use namespace-level Event Hubs authorization for multi-topic access
 - Use least privilege access for PostgreSQL user
 - Consider Azure Key Vault for production secrets
 - Restrict network access in production (remove 0.0.0.0/0 CIDRS)
 - Change default passwords before production use
+- Event Hubs connection strings should have minimal required permissions (Listen/Send only)
 
 ## Cost Optimization
 
