@@ -14,6 +14,8 @@ spec:
   environmentId: 7f615ba3-d3f4-4184-b846-099507c70364
   
   # Enable RBAC and security features
+  # NOTE: RBAC requires a valid Materialize license key (included in postgres-credentials secret)
+  # NOTE: RBAC requires postgres-credentials secret to have actual values (FIXED)
   # NOTE: Requires sufficient PostgreSQL connection limits (increase max_connections if needed)
   enableRbac: true
   authenticatorKind: Password
