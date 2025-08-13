@@ -177,8 +177,8 @@ envsubst < apps/materialize/auth-secret.yaml | kubectl apply -f -
 #### 3. Verify RBAC Configuration
 The Materialize environment is configured with:
 - `enableRbac: true` - RBAC enabled
-- `authenticatorKind: PasswordBased` - Password authentication  
-- `usersSecretName: materialize-users` - References the auth secret
+- `authenticatorKind: Password` - Password authentication
+- License key required for RBAC features
 
 ### Connecting with Authentication
 

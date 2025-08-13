@@ -16,7 +16,6 @@ spec:
   # Enable RBAC and security features
   # NOTE: Requires sufficient PostgreSQL connection limits (increase max_connections if needed)
   enableRbac: true
-  authenticatorKind: PasswordBased
-  usersSecretName: materialize-users
+  authenticatorKind: Password
   
   # Azure Blob Storage configured via SAS token in persist_backend_url
