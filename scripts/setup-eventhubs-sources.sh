@@ -18,6 +18,13 @@ if [[ -z "${EVENTHUBS_NAMESPACE}" ]]; then
     exit 1
 fi
 
+if [[ -z "${MATERIALIZE_ADMIN_PASSWORD}" ]]; then
+    echo "❌ Error: MATERIALIZE_ADMIN_PASSWORD environment variable not set"
+    echo "Please source your .env file: source .env"
+    echo "Note: This is required for RBAC-enabled Materialize authentication"
+    exit 1
+fi
+
 echo "🔧 Setting up Event Hubs sources in Materialize..."
 echo "📡 Event Hubs Namespace: ${EVENTHUBS_NAMESPACE}"
 
@@ -29,7 +36,7 @@ sleep 3
 
 # Substitute environment variables and run SQL
 echo "📝 Creating Event Hubs connection and sources..."
-envsubst < scripts/setup-multi-topic-connection.sql | psql "postgresql://materialize@localhost:6875/materialize"
+envsubst < scripts/setup-multi-topic-connection.sql | psql "postgresql://materialize:${MATERIALIZE_ADMIN_PASSWORD}@localhost:6875/materialize"
 
 # Kill port-forward
 kill $FORWARD_PID
@@ -43,4 +50,4 @@ echo "  python3 scripts/send-more-updates.py"
 echo ""
 echo "📊 To query data:"
 echo "  kubectl port-forward -n materialize-system svc/mzmpl79if4kx-environmentd 6875:6875 &"
-echo "  psql \"postgresql://materialize@localhost:6875/materialize\""
+echo "  psql \"postgresql://materialize:\${MATERIALIZE_ADMIN_PASSWORD}@localhost:6875/materialize\""
