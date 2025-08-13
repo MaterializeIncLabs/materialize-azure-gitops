@@ -230,6 +230,21 @@ az postgres flexible-server parameter set \
 kubectl get secret materialize-users -n materialize-system -o yaml
 ```
 
+**DNS Resolution Issues**: If RBAC pods fail with "Name or service not known"
+```bash
+# Ensure postgres-credentials secret has actual values, not template variables
+kubectl get secret postgres-credentials -n materialize-system -o jsonpath='{.data.metadata_backend_url}' | base64 -d
+# Should show: postgresql://user:pass@host:5432/materialize?sslmode=require
+# NOT: postgresql://${POSTGRES_USERNAME}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:5432/materialize
+```
+
+**Missing License Key**: If pods crash with "failed to validate license key"
+```bash
+# Verify license_key exists in postgres-credentials secret
+kubectl get secret postgres-credentials -n materialize-system -o jsonpath='{.data.license_key}' | base64 -d | wc -c
+# Should return a large number (license key length), not 0
+```
+
 ## Components
 
 ### Core Files
