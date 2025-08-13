@@ -3,6 +3,9 @@
 # Environment files with sensitive data
 .env
 
+# License key - contains sensitive data
+.license
+
 # Temporary files
 *.tmp
 *.swp

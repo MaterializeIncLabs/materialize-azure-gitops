@@ -120,7 +120,7 @@ az aks get-credentials \
 
 3. **Access Materialize**:
    - Console: `http://<CONSOLE-IP>:8080`
-   - SQL: `psql "postgresql://materialize@<SQL-IP>:6875/materialize"`
+   - SQL (with RBAC): `psql "postgresql://materialize:${MATERIALIZE_ADMIN_PASSWORD}@<SQL-IP>:6875/materialize"`
 
 ## Configuration
 
@@ -153,6 +153,81 @@ az storage account generate-sas \
   --permissions rwdlacup \
   --expiry 2026-12-31 \
   --https-only
+```
+
+## RBAC Authentication
+
+This deployment enables Role-Based Access Control (RBAC) for secure access to Materialize.
+
+### Setup Authentication
+
+#### 1. Configure Admin Password
+```bash
+# Edit your .env file with a strong password
+export MATERIALIZE_ADMIN_PASSWORD="YourSecurePassword123!"
+source .env
+```
+
+#### 2. Deploy Authentication Secret
+```bash
+# Create the authentication secret with your password
+envsubst < apps/materialize/auth-secret.yaml | kubectl apply -f -
+```
+
+#### 3. Verify RBAC Configuration
+The Materialize environment is configured with:
+- `enableRbac: true` - RBAC enabled
+- `authenticatorKind: Password` - Password authentication
+- License key required for RBAC features
+
+### Connecting with Authentication
+
+#### Via Port-Forward
+```bash
+kubectl port-forward -n materialize-system svc/mzmpl79if4kx-environmentd 6875:6875 &
+psql "postgresql://materialize:${MATERIALIZE_ADMIN_PASSWORD}@localhost:6875/materialize"
+```
+
+#### Via Load Balancer
+```bash
+# Get the external IP
+kubectl get svc -n materialize-system materialize-sql-external
+
+# Connect with authentication
+psql "postgresql://materialize:${MATERIALIZE_ADMIN_PASSWORD}@<EXTERNAL-IP>:6875/materialize"
+```
+
+### User Management
+
+Once connected as admin, you can create additional users:
+```sql
+-- Create a new user
+CREATE ROLE analyst LOGIN PASSWORD 'analyst_password';
+
+-- Grant permissions
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO analyst;
+GRANT SELECT ON ALL MATERIALIZED VIEWS IN SCHEMA public TO analyst;
+
+-- Connect as the new user
+psql "postgresql://analyst:analyst_password@<host>:6875/materialize"
+```
+
+### Troubleshooting RBAC
+
+**Connection Refused**: Check PostgreSQL connection limits
+```bash
+# Increase max_connections if needed
+az postgres flexible-server parameter set \
+  --resource-group materialize-rg \
+  --server-name <postgres-server> \
+  --name max_connections \
+  --value 200
+```
+
+**Authentication Failed**: Verify secret deployment
+```bash
+# Check if secret exists and has correct values
+kubectl get secret materialize-users -n materialize-system -o yaml
 ```
 
 ## Components
@@ -194,14 +269,19 @@ az storage blob list --account-name <account> --container-name <container>
 
 ### 1. Verify Materialize Connection
 ```bash
-kubectl run test-materialize --image=postgres:15 --restart=Never --rm -- \
-  bash -c "psql 'postgresql://materialize@<SERVICE-IP>:6875/materialize' -c 'SELECT 1 as test;'"
+# Get admin password from environment
+source .env
+
+# Test connection with authentication
+kubectl run test-materialize --image=postgres:15 --restart=Never --rm -it -- \
+  bash -c "psql 'postgresql://materialize:${MATERIALIZE_ADMIN_PASSWORD}@<SERVICE-IP>:6875/materialize' -c 'SELECT 1 as test;'"
 ```
 
 ### 2. Create Test Data
 ```bash
-kubectl run test-materialize --image=postgres:15 --restart=Never --rm -- \
-  bash -c "psql 'postgresql://materialize@<SERVICE-IP>:6875/materialize' <<EOF
+# Create test data with authentication
+kubectl run test-materialize --image=postgres:15 --restart=Never --rm -it -- \
+  bash -c "psql 'postgresql://materialize:${MATERIALIZE_ADMIN_PASSWORD}@<SERVICE-IP>:6875/materialize' <<EOF
 CREATE TABLE test_data (id INT, name TEXT);
 INSERT INTO test_data VALUES (1, 'blob-test-data'), (2, 'azure-storage');
 SELECT * FROM test_data;
