@@ -168,11 +168,13 @@ export MATERIALIZE_ADMIN_PASSWORD="YourSecurePassword123!"
 source .env
 ```
 
-#### 2. Deploy Authentication Secret
+#### 2. Deploy Authentication Secrets
 ```bash
-# Create the authentication secret with your password
-envsubst < apps/materialize/auth-secret.yaml | kubectl apply -f -
+# Deploy both secrets using envsubst to process template variables
+./scripts/deploy-secrets-with-envsubst.sh
 ```
+
+**Important:** Secrets are excluded from Flux management to prevent template variable overwrites. Always use the script above instead of applying YAML files directly.
 
 #### 3. Verify RBAC Configuration
 The Materialize environment is configured with:
@@ -185,7 +187,12 @@ The Materialize environment is configured with:
 #### Via Port-Forward
 ```bash
 kubectl port-forward -n materialize-system svc/mzmpl79if4kx-environmentd 6875:6875 &
-psql "postgresql://materialize:${MATERIALIZE_ADMIN_PASSWORD}@localhost:6875/materialize"
+
+# Connect as mz_system superuser (recommended for administration)
+PGPASSWORD='YourSecurePassword123!' psql -h localhost -p 6875 -U mz_system -d materialize
+
+# Or connect as materialize user
+PGPASSWORD='YourSecurePassword123!' psql -h localhost -p 6875 -U materialize -d materialize
 ```
 
 #### Via Load Balancer
@@ -199,17 +206,31 @@ psql "postgresql://materialize:${MATERIALIZE_ADMIN_PASSWORD}@<EXTERNAL-IP>:6875/
 
 ### User Management
 
-Once connected as admin, you can create additional users:
+Connect as mz_system superuser to manage users and permissions:
+
 ```sql
--- Create a new user
-CREATE ROLE analyst LOGIN PASSWORD 'analyst_password';
+-- Connect as superuser first
+-- PGPASSWORD='YourPassword!' psql -h localhost -p 6875 -U mz_system -d materialize
+
+-- Create a new user (LOGIN attribute supported with RBAC enabled)
+CREATE ROLE analyst LOGIN;
 
 -- Grant permissions
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO analyst;
 GRANT SELECT ON ALL MATERIALIZED VIEWS IN SCHEMA public TO analyst;
 
--- Connect as the new user
-psql "postgresql://analyst:analyst_password@<host>:6875/materialize"
+-- Enable global RBAC checks (optional - enables full role-based security)
+ALTER SYSTEM SET enable_rbac_checks = TRUE;
+
+-- View existing roles
+SELECT rolname, rolcanlogin FROM pg_roles WHERE rolname NOT LIKE 'mz_%';
+```
+
+#### Connecting as Created Users
+```bash
+# Note: User passwords are managed through Materialize's user system
+# Initial users may not have passwords set - use mz_system for administration
+PGPASSWORD='user_password' psql -h localhost -p 6875 -U analyst -d materialize
 ```
 
 ### Troubleshooting RBAC
